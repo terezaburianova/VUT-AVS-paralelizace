@@ -1,0 +1,1 @@
+# VUT-AVS-paralelizace
