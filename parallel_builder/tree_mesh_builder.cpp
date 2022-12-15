@@ -23,43 +23,44 @@ TreeMeshBuilder::TreeMeshBuilder(unsigned gridEdgeSize)
 unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
 {
     unsigned totalCnt = 0;
-    // #pragma omp parallel
-    // {
-    //     #pragma omp single
+    #pragma omp parallel
+    {
+        #pragma omp single
         totalCnt = processChild(Vec3_t<float>(0,0,0), field, mGridSize);
-    // }
-    
+    }
     return totalCnt;
 }
 
-unsigned TreeMeshBuilder::processChild(const Vec3_t<float> offset, const ParametricScalarField &field, size_t edgeSize)
+unsigned TreeMeshBuilder::processChild(const Vec3_t<float> &offset, const ParametricScalarField &field, size_t edgeSize)
 {
     unsigned totalCnt = 0;
 
     Vec3_t<float> positions{
-        (offset.x + edgeSize/2.0)*mGridResolution,
-        (offset.y + edgeSize/2.0)*mGridResolution,
-        (offset.z + edgeSize/2.0)*mGridResolution
+        (offset.x + edgeSize/2.F)*mGridResolution,
+        (offset.y + edgeSize/2.F)*mGridResolution,
+        (offset.z + edgeSize/2.F)*mGridResolution
     };
 
-    const float cond = mIsoLevel + (sqrt(3.0) * mGridResolution * edgeSize)/2.0;
+    const float cond = mIsoLevel + (sqrt(3.F) * mGridResolution * edgeSize)/2.0;
     if (evaluateFieldAt(positions, field) > cond) return 0;
-    if (edgeSize <= cutoff) return buildCube(offset, field);
-
-    for (Vec3_t<float> combination : sc_vertexNormPos) {
-        // #pragma omp task firstprivate(combination)
-        // {
-            const Vec3_t<float> newOffset(
-                offset.x + combination.x * edgeSize/2.0,
-                offset.y + combination.y * edgeSize/2.0,
-                offset.z + combination.z * edgeSize/2.0
-            );
-            unsigned cnt = processChild(newOffset, field, edgeSize/2.0);
-            // #pragma omp critical
-            totalCnt += cnt;
-        // }
+    if (edgeSize <= cutoff) {
+        return buildCube(offset, field);
     }
-    // #pragma omp taskwait
+    
+    for (Vec3_t<float> combination : sc_vertexNormPos) {
+        #pragma omp task firstprivate(combination)
+        {
+            const Vec3_t<float> newOffset(
+                offset.x + combination.x * edgeSize/2.F,
+                offset.y + combination.y * edgeSize/2.F,
+                offset.z + combination.z * edgeSize/2.F
+            );
+            unsigned cnt = processChild(newOffset, field, edgeSize/2.F);
+            #pragma omp critical
+            totalCnt += cnt;
+        }
+    }
+    #pragma omp taskwait
     return totalCnt;
 }
 
@@ -93,6 +94,6 @@ float TreeMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos, const Parametri
 
 void TreeMeshBuilder::emitTriangle(const BaseMeshBuilder::Triangle_t &triangle)
 {
-    // #pragma omp critical
+    #pragma omp critical
     mTriangles.push_back(triangle);
 }

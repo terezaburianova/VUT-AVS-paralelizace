@@ -20,10 +20,10 @@ public:
 
 protected:
     unsigned marchCubes(const ParametricScalarField &field);
-    unsigned processChild(const Vec3_t<float> offset, const ParametricScalarField &field, size_t edgeSize);
+    unsigned processChild(const Vec3_t<float> &offset, const ParametricScalarField &field, size_t edgeSize);
     float evaluateFieldAt(const Vec3_t<float> &pos, const ParametricScalarField &field);
     void emitTriangle(const Triangle_t &triangle);
-    const Triangle_t *getTrianglesArray() const { return nullptr; }
+    const Triangle_t *getTrianglesArray() const { return mTriangles.data(); }
 
     std::vector<Triangle_t> mTriangles; ///< Temporary array of triangles
     size_t cutoff = 1;
