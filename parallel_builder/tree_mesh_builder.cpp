@@ -1,11 +1,11 @@
 /**
  * @file    tree_mesh_builder.cpp
  *
- * @author  FULL NAME <xlogin00@stud.fit.vutbr.cz>
+ * @author  Tereza Burianova <xburia28@stud.fit.vutbr.cz>
  *
  * @brief   Parallel Marching Cubes implementation using OpenMP tasks + octree early elimination
  *
- * @date    DATE
+ * @date    15 Dec 2022
  **/
 
 #include <iostream>
@@ -22,20 +22,77 @@ TreeMeshBuilder::TreeMeshBuilder(unsigned gridEdgeSize)
 
 unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
 {
-    // Suggested approach to tackle this problem is to add new method to
-    // this class. This method will call itself to process the children.
-    // It is also strongly suggested to first implement Octree as sequential
-    // code and only when that works add OpenMP tasks to achieve parallelism.
+    unsigned totalCnt = 0;
+    // #pragma omp parallel
+    // {
+    //     #pragma omp single
+        totalCnt = processChild(Vec3_t<float>(0,0,0), field, mGridSize);
+    // }
     
-    return 0;
+    return totalCnt;
+}
+
+unsigned TreeMeshBuilder::processChild(const Vec3_t<float> offset, const ParametricScalarField &field, size_t edgeSize)
+{
+    unsigned totalCnt = 0;
+
+    Vec3_t<float> positions{
+        (offset.x + edgeSize/2.0)*mGridResolution,
+        (offset.y + edgeSize/2.0)*mGridResolution,
+        (offset.z + edgeSize/2.0)*mGridResolution
+    };
+
+    const float cond = mIsoLevel + (sqrt(3.0) * mGridResolution * edgeSize)/2.0;
+    if (evaluateFieldAt(positions, field) > cond) return 0;
+    if (edgeSize <= cutoff) return buildCube(offset, field);
+
+    for (Vec3_t<float> combination : sc_vertexNormPos) {
+        // #pragma omp task firstprivate(combination)
+        // {
+            const Vec3_t<float> newOffset(
+                offset.x + combination.x * edgeSize/2.0,
+                offset.y + combination.y * edgeSize/2.0,
+                offset.z + combination.z * edgeSize/2.0
+            );
+            unsigned cnt = processChild(newOffset, field, edgeSize/2.0);
+            // #pragma omp critical
+            totalCnt += cnt;
+        // }
+    }
+    // #pragma omp taskwait
+    return totalCnt;
 }
 
 float TreeMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos, const ParametricScalarField &field)
 {
-    return 0.0f;
+    // NOTE: This method is called from "buildCube(...)"!
+
+    // 1. Store pointer to and number of 3D points in the field
+    //    (to avoid "data()" and "size()" call in the loop).
+    const Vec3_t<float> *pPoints = field.getPoints().data();
+    const unsigned count = unsigned(field.getPoints().size());
+
+    float value = std::numeric_limits<float>::max();
+
+    // 2. Find minimum square distance from points "pos" to any point in the
+    //    field.
+    for(unsigned i = 0; i < count; ++i)
+    {
+        float distanceSquared  = (pos.x - pPoints[i].x) * (pos.x - pPoints[i].x);
+        distanceSquared       += (pos.y - pPoints[i].y) * (pos.y - pPoints[i].y);
+        distanceSquared       += (pos.z - pPoints[i].z) * (pos.z - pPoints[i].z);
+
+        // Comparing squares instead of real distance to avoid unnecessary
+        // "sqrt"s in the loop.
+        value = std::min(value, distanceSquared);
+    }
+
+    // 3. Finally take square root of the minimal square distance to get the real distance
+    return sqrt(value);
 }
 
 void TreeMeshBuilder::emitTriangle(const BaseMeshBuilder::Triangle_t &triangle)
 {
-    
+    // #pragma omp critical
+    mTriangles.push_back(triangle);
 }
