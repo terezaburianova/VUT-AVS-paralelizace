@@ -1,0 +1,81 @@
+Architektury Výpočetních Systémů (AVS 2022)
+Projekt č. 2 (PMC)
+Login: xburia28
+
+Úloha 1: Paralelizace původního řešení
+===============================================================================
+
+1) Kterou ze smyček (viz zadání) je vhodnější paralelizovat a co způsobuje 
+   neefektivitu paralelizaci té druhé?
+
+Je vhodnější paralelizovat smyčku ve funkci marchCubes, neboť funkce evaluateFieldAt je volána ve funkci buildCube a ta je volána v cyklu ve funkci marchCubes, který je tak z těchto dvou cyklů ten vnější. Kdyby byla paralelizována smyčka ve funkci evaluateFieldAt, týkala by se tato změna pouze malé části kódu a vzhledem k potřebné režii by se paralelizace nevyplatila.
+
+2) Jaké plánování (rozdělení práce mezi vlákna) jste zvolili a proč? 
+   Jaký vliv má velikost "chunk" při dynamickém plánování (8, 16, 32, 64)?
+
+Při testování různých kombinací plánování a velikosti chunk byly rozdíly minimální, ale nejlepších výsledků dosahovalo dynamic plánování. Zvolila jsem velikost chunk 16, při výběru je třeba dbát na režii a na případné přehlcení vláken při zvolení vyšší velikosti.
+
+3) Jakým způsobem zajišťujete ukládání trojúhelníků z několika vláken současně?
+
+Ukládání trojúhelníků je zajištěno ve funkci emitTriangle, do které byla pomocí "#pragma omp critical" přidána kritická sekce pro volání funkce push_back. Je tak zajištěna konzistence dat.
+
+Úloha 2: Paralelní průchod stromem
+===============================================================================
+
+1) Stručně popište použití OpenMP tasků ve vašem řešení.
+
+Nejprve je ve funkci marchCubes označena paralelní sekce programu pomocí "pragma omp parallel". Následně je volána funkce processChild, ale vzhledem k tomu, že není žádoucí toto volání provádět každým vláknem zvlášť, je volána jen prvním příchozím vláknem, což je zajištěno pomocí "pragma omp single". Hlavní výpočet je pak prováděn rekurzivně, rozdělením každého výpočtu na 8 jeho potomků (všechny kombinace 0 a 1 - konfigurace). Těchto 8 výpočtů je vždy prováděno paralelně pomocí "#pragma omp task shared(totalCnt)". Dovětek shared značí, že proměnná totalCnt je sdílena mezi všemi těmito vlákny. Zápis do této proměnné je zajištěn pomocí "#pragma omp atomic", tedy zápis nemůže být přerušen jiným procesem. Následně se pak čeká na dokončení provádění všech těchto 8 procesů pomocí "#pragma omp taskwait".
+
+2) Jaký vliv má na vaše řešení tzv. "cut-off"? Je vhodné vytvářet nový 
+   task pro každou krychli na nejnižší úrovni?
+
+Zvolila jsem hodnotu cut-off 1. Výpočet je využitím cut-off zrychlen, neboť kostky, které by byly dále rozděleny na menší kostky s dálkou hrany 1 a méně, se dále paralelně dělit nebudou a tedy pro ně nebudou vytvořeny zbytečné tasky. Vyšší hodnoty se při testování neosvědčily, výpočet zpomalily.
+
+3) Jakým způsobem zajišťujete ukládání trojúhelníků z několika vláken současně?
+
+Ukládání trojúhelníků je zajištěno ve funkci emitTriangle, do které byla pomocí "#pragma omp critical" přidána kritická sekce pro volání funkce push_back. Je tak zajištěna konzistence dat.
+
+Úloha 3: Grafy škálování všech řešení
+===============================================================================
+
+1) Stručně zhodnoťte efektivitu vytvořených řešení (na základě grafů škálování).
+
+Při slabém škálování je ideální křivka konstantní nebo klesající. To je pozorovatelné spíše u implementace loop, která je tedy v tomto ohledu efektivnější, než implementace tree, při které křivky stoupají.
+
+Při silném škálování je ideální klesající přímka (zrychlení se rovnoměrně zvyšuje s množstvím vláken). To lze vidět spíše u implementace loop, která je tak efektivnější. Při implementaci tree se občas zrychlení se stoupajícím počtem vláken dokonce snižuje.
+
+2) V jakém případě (v závislosti na počtu bodů ve vstupním souboru a velikosti 
+   mřížky) bude vaše řešení 1. úlohy neefektivní? (pokud takový případ existuje)
+
+Bude neefektivní pro velké množství vláken a menší vstup.
+
+3) Je (nebo není) stromový algoritmus efektivnější z pohledu slabého škálování 
+   vzhledem ke vstupu?
+
+Stromový algoritmus z pohledu slabého škálování není efektivnější, protože loop algoritmus vyžaduje stejné množství času pro různé množství vláken. Doba zpracování je většinou vyšší pro měnší vstupy.
+
+4) Jaký je rozdíle mezi silným a slabým škálováním?
+
+Silné škálování - problém s pevnou velikostí je vykonán za co nejnižší čas
+Slabé škálování - za pevně daný čas je vyřešen co největší problém
+
+Úloha 4: Analýza využití jader pomocí VTune
+================================================================================
+
+1) Jaké bylo průměrné využití jader pro všechny tři implementace s omezením na 
+   18 vláken? Na kolik procent byly využity?
+   
+   ref: 2,8% (0,998/36)
+   loop: 48,4% (17,436/36)
+   tree: 43,6% (15,697/36)
+
+2) Jaké bylo průměrné využití jader pro všechny tři implementace s využitím 
+   všech jader? Na kolik procent se podařilo využít obě CPU?
+   
+   ref: 2,8% (0,998/36)
+   loop: 91,8% (33,050/36)
+   tree: 73,0% (26,274/36)
+
+3) Jaké jsou závěry z těchto měření?
+
+Při obou implementacích se s větším vstupem podařilo lépe využít všech jader (vláken). Děje se tak pravděpodobně kvůli vysoké režii i pro menší vstupy.
