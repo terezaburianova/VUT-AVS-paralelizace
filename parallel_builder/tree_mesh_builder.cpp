@@ -46,7 +46,7 @@ unsigned TreeMeshBuilder::processChild(const Vec3_t<float> &offset, const Parame
     }
     
     for (Vec3_t<float> combination : sc_vertexNormPos) {
-        #pragma omp task firstprivate(combination) shared(totalCnt)
+        #pragma omp task shared(totalCnt)
         {
             const Vec3_t<float> newOffset(
                 offset.x + combination.x * edgeSize/2.F,
@@ -54,7 +54,7 @@ unsigned TreeMeshBuilder::processChild(const Vec3_t<float> &offset, const Parame
                 offset.z + combination.z * edgeSize/2.F
             );
             unsigned cnt = processChild(newOffset, field, edgeSize/2.F);
-            #pragma omp critical
+            #pragma omp atomic
             totalCnt += cnt;
         }
     }
